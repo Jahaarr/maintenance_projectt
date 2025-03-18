@@ -1,7 +1,7 @@
 from django.db import models
 
 class Equipement(models.Model):
-    nom = models.CharField(max_length=100)
+    nom = models.CharField(max_length=100, unique=True)  # Ajout de unique=True    reference = models.CharField(max_length=50)
     reference = models.CharField(max_length=50)
     modele = models.CharField(max_length=50)
     localisation = models.CharField(max_length=100)

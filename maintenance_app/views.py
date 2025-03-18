@@ -62,6 +62,8 @@ def dashboard(request):
         'En cours': en_cours,
         'Disponibles': disponibles,
     }
+    stats_by_status_labels = list(stats_by_status.keys())  # Convertir en liste
+    stats_by_status_values = list(stats_by_status.values())  # Convertir en liste
 
     # Graphique 2 : Nombre de sous-ensembles par équipement
     stats_by_equipment = {}
@@ -69,6 +71,8 @@ def dashboard(request):
         count = SousEnsemble.objects.filter(equipement=equip).count()
         if count > 0:
             stats_by_equipment[equip.nom] = count
+    stats_by_equipment_labels = list(stats_by_equipment.keys())  # Convertir en liste
+    stats_by_equipment_values = list(stats_by_equipment.values())  # Convertir en liste
 
     context = {
         'total_equipments': total_equipments,
@@ -77,7 +81,9 @@ def dashboard(request):
         'en_cours': en_cours,
         'disponibles': disponibles,
         'alerts': alerts,
-        'stats_by_status': stats_by_status,
-        'stats_by_equipment': stats_by_equipment,
+        'stats_by_status_labels': stats_by_status_labels,
+        'stats_by_status_values': stats_by_status_values,
+        'stats_by_equipment_labels': stats_by_equipment_labels,
+        'stats_by_equipment_values': stats_by_equipment_values,
     }
     return render(request, 'maintenance_app/dashboard.html', context)

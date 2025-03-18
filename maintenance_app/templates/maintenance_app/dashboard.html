@@ -35,10 +35,10 @@
         const statusChart = new Chart(ctxStatus, {
             type: 'bar',
             data: {
-                labels: {{ stats_by_status.keys|safe }},
+                labels: {{ stats_by_status_labels|safe }},
                 datasets: [{
                     label: 'Nombre de Sous-Ensembles',
-                    data: {{ stats_by_status.values|safe }},
+                    data: {{ stats_by_status_values|safe }},
                     backgroundColor: ['#ff6384', '#36a2eb', '#ffce56'],
                     borderWidth: 1
                 }]
@@ -61,10 +61,10 @@
         const equipmentChart = new Chart(ctxEquipment, {
             type: 'pie',
             data: {
-                labels: {{ stats_by_equipment.keys|safe }},
+                labels: {{ stats_by_equipment_labels|safe }},
                 datasets: [{
                     label: 'Sous-Ensembles',
-                    data: {{ stats_by_equipment.values|safe }},
+                    data: {{ stats_by_equipment_values|safe }},
                     backgroundColor: ['#ff6384', '#36a2eb', '#ffce56', '#4bc0c0', '#9966ff'],
                 }]
             }
