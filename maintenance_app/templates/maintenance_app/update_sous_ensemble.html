@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Mise à Jour de {{ sous_ensemble.nom }}</title>
+</head>
+<body>
+    <h1>Mise à Jour de {{ sous_ensemble.nom }} ({{ sous_ensemble.equipement.nom }})</h1>
+    <form method="post">
+        {% csrf_token %}
+        {{ form.as_p }}
+        <button type="submit">Sauvegarder</button>
+    </form>
+    <a href="{% url 'equipment_detail' sous_ensemble.equipement.id %}">Retour aux détails</a>
+</body>
+</html>

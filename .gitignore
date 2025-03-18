@@ -1,0 +1,19 @@
+# Environnement virtuel
+env/
+
+# Fichiers Python/Django
+*.pyc
+__pycache__/
+*.pyo
+*.pyd
+
+# Fichiers de base de données locaux
+*.sqlite3
+
+# Fichiers temporaires
+*.log
+*.pot
+
+# Fichiers de développement
+.idea/  # Si vous utilisez PyCharm
+.vscode/  # Si vous utilisez VS Code
