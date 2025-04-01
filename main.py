@@ -1,195 +1,477 @@
 import sys
-from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
-                            QLabel, QComboBox, QPushButton, QLineEdit, QFrame, QMessageBox)
+from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+                             QLabel, QComboBox, QPushButton, QLineEdit, QFrame, QMessageBox,
+                             QTableWidget, QTableWidgetItem, QTabWidget, QScrollArea)
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont
 import pandas as pd
+import numpy as np
 
 class EquipmentApp(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Equipment Management App")
-        self.setGeometry(100, 100, 800, 600)
-        
+        self.setGeometry(100, 100, 1000, 700)
+
+        # Apply a professional light theme to the main window
+        self.setStyleSheet("""
+            QMainWindow {
+                background-color: #f5f6fa;
+            }
+            QTabWidget::pane {
+                border: 1px solid #dfe6e9;
+                background-color: #ffffff;
+            }
+            QTabBar::tab {
+                background: #dfe6e9;
+                color: #2d3436;
+                padding: 10px 20px;
+                border-top-left-radius: 5px;
+                border-top-right-radius: 5px;
+                font: 12pt "Segoe UI";
+            }
+            QTabBar::tab:selected {
+                background: #ffffff;
+                border-bottom: 2px solid #0984e3;
+            }
+            QTabBar::tab:hover {
+                background: #b2bec3;
+            }
+        """)
+
         # Central widget and main layout
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         main_layout = QVBoxLayout(central_widget)
-        main_layout.setContentsMargins(10, 10, 10, 10)
-        main_layout.setSpacing(10)
-        
+        main_layout.setContentsMargins(20, 20, 20, 20)
+        main_layout.setSpacing(15)
+
         # Load the Excel file with multiple sheets
         try:
-            self.excel_data = pd.read_excel("ENGINS.xlsx", sheet_name=None, header=None)
+            self.excel_data = pd.read_excel("Cartographie SE par atelier.xlsx", sheet_name=None, header=None)
         except FileNotFoundError:
             self.excel_data = {}
-            print("Excel file not found. Created an empty dictionary.")
-        
+            QMessageBox.critical(self, "Error", "Excel file 'Cartographie SE par atelier.xlsx' not found.")
+            return
+
         # Preprocess sheets to extract relevant sections
         self.processed_data = {}
         for sheet_name, df in self.excel_data.items():
             self.processed_data[sheet_name] = self.preprocess_sheet(df, sheet_name)
-        
+
         # Current sheet data
         self.df = None
-        
+
         # Title
         title_label = QLabel("Equipment Data Management")
         title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title_font = QFont("Arial", 16, QFont.Weight.Bold)
+        title_font = QFont("Segoe UI", 18, QFont.Weight.Bold)
         title_label.setFont(title_font)
-        title_label.setStyleSheet("color: #2c3e50;")
+        title_label.setStyleSheet("color: #2d3436; margin-bottom: 10px;")
         main_layout.addWidget(title_label)
-        
-        # Sheet selection frame
-        sheet_frame = QFrame()
-        sheet_frame.setStyleSheet("background-color: #d5e8f5; padding: 5px;")
-        sheet_layout = QHBoxLayout(sheet_frame)
-        sheet_layout.setContentsMargins(10, 5, 10, 5)
-        
-        sheet_label = QLabel("Select Sheet:")
-        sheet_label.setFont(QFont("Arial", 12))
-        sheet_layout.addWidget(sheet_label)
-        
-        self.sheet_combo = QComboBox()
-        self.sheet_combo.setFont(QFont("Arial", 12))
-        self.sheet_combo.addItems(list(self.processed_data.keys()))
-        self.sheet_combo.currentTextChanged.connect(self.load_sheet)
-        sheet_layout.addWidget(self.sheet_combo)
-        
-        main_layout.addWidget(sheet_frame)
-        
-        # Input frame
-        self.input_frame = QFrame()
-        self.input_frame.setStyleSheet("background-color: #d5e8f5; padding: 10px;")
-        input_layout = QVBoxLayout(self.input_frame)
-        input_layout.setContentsMargins(10, 10, 10, 10)
-        input_layout.setSpacing(10)
-        
-        # Equipment selection
-        equipment_row = QHBoxLayout()
-        equipment_label = QLabel("Select Equipment:")
-        equipment_label.setFont(QFont("Arial", 12))
-        equipment_row.addWidget(equipment_label)
-        
-        self.equipment_combo = QComboBox()
-        self.equipment_combo.setFont(QFont("Arial", 12))
-        self.equipment_combo.currentTextChanged.connect(self.update_sous_ensemble)
-        equipment_row.addWidget(self.equipment_combo)
-        input_layout.addLayout(equipment_row)
-        
-        # Sous-ensemble selection
-        sous_ensemble_row = QHBoxLayout()
-        sous_ensemble_label = QLabel("Select Sous-ensemble:")
-        sous_ensemble_label.setFont(QFont("Arial", 12))
-        sous_ensemble_row.addWidget(sous_ensemble_label)
-        
-        self.sous_ensemble_combo = QComboBox()
-        self.sous_ensemble_combo.setFont(QFont("Arial", 12))
-        self.sous_ensemble_combo.currentTextChanged.connect(self.display_data)
-        sous_ensemble_row.addWidget(self.sous_ensemble_combo)
-        input_layout.addLayout(sous_ensemble_row)
-        
-        main_layout.addWidget(self.input_frame)
-        
-        # Data display frame
-        self.data_frame = QFrame()
-        self.data_frame.setStyleSheet("background-color: #f0f9ff; padding: 10px;")
-        data_layout = QVBoxLayout(self.data_frame)
-        data_layout.setContentsMargins(10, 10, 10, 10)
-        data_layout.setSpacing(10)
-        
-        self.labels = {}
-        self.columns_to_display = [
-            "Criticité", "Quantité SE installée", "Sous-ensemble relais disponible (révisé)",
-            "Sous-ensemble en attente révision", "Sous-ensemble encours de révision",
-            "Corps de Sous-ensembles disponibles (révisable)"
-        ]
-        
-        for col in self.columns_to_display:
-            row_layout = QHBoxLayout()
-            
-            label = QLabel(f"{col}:")
-            label.setFont(QFont("Arial", 12, QFont.Weight.Bold))
-            label.setStyleSheet("color: #34495e;")
-            row_layout.addWidget(label)
-            
-            entry = QLineEdit()
-            entry.setFont(QFont("Arial", 12))
-            entry.setStyleSheet("background-color: white; color: #2c3e50;")
-            entry.setFixedHeight(30)
-            row_layout.addWidget(entry)
-            
-            self.labels[col] = entry
-            data_layout.addLayout(row_layout)
-        
-        main_layout.addWidget(self.data_frame, stretch=1)
-        
-        # Save button
-        save_button = QPushButton("Save Changes")
-        save_button.setFont(QFont("Arial", 12))
-        save_button.setStyleSheet("""
-            QPushButton {
-                background-color: #3498db;
-                color: white;
-                padding: 8px;
-                border-radius: 5px;
-            }
-            QPushButton:hover {
-                background-color: #2980b9;
-            }
-        """)
-        save_button.clicked.connect(self.save_data)
-        main_layout.addWidget(save_button, alignment=Qt.AlignmentFlag.AlignCenter)
-    
+
+        # Tabs for different sections
+        self.tabs = QTabWidget()
+        main_layout.addWidget(self.tabs)
+
+        # Tab 1: Equipment Overview
+        self.tab_equipment = QWidget()
+        self.tabs.addTab(self.tab_equipment, "Equipment Overview")
+        self.setup_equipment_tab()
+
+        # Tab 2: Update Data
+        self.tab_update = QWidget()
+        self.tabs.addTab(self.tab_update, "Update Data")
+        self.setup_update_tab()
+
+        # Tab 3: Dashboard
+        self.tab_dashboard = QWidget()
+        self.tabs.addTab(self.tab_dashboard, "Dashboard")
+        self.setup_dashboard_tab()
+
     def preprocess_sheet(self, df, sheet_name):
-        # Check if the DataFrame is empty
         if df.empty:
             print(f"Sheet {sheet_name} is empty. Skipping preprocessing.")
             return pd.DataFrame()
 
-        # If the sheet is "Cartographie Engin", extract the "Sous-ensemble Details" section
-        if sheet_name == "Cartographie Engin":
-            # Find the header row for the "Sous-ensemble Details" section
-            target_header = ["Equipement", "Sous-ensemble", "Criticité", "Quantité SE installée", 
-                             "Sous-ensemble relais disponible (révisé)", "Sous-ensemble en attente révision", 
-                             "Sous-ensemble encours de révision", "Corps de Sous-ensembles disponibles (révisable)"]
-            header_row = None
-            for i in range(len(df)):
-                row = df.iloc[i].astype(str).str.strip()
-                if all(col in row.values for col in target_header):
-                    header_row = i
-                    break
-            
-            if header_row is not None:
-                # Read the data starting from the header row
-                df_section = pd.read_excel("ENGINS.xlsx", sheet_name=sheet_name, skiprows=header_row)
-                # Filter rows until we hit an empty row or irrelevant section
-                df_section = df_section.dropna(subset=["Equipement", "Sous-ensemble"], how="all")
-                # Ensure column names are consistent
-                df_section.columns = df_section.columns.str.strip()
-                return df_section
-            else:
-                print(f"Could not find the 'Sous-ensemble Details' section in sheet {sheet_name}.")
-                return pd.DataFrame()
+        # Find the header row
+        target_header = ["Equipement", "Sous-ensemble", "Quantité SE installée",
+                         "Sous-ensemble relais disponible (révisé)", "Sous-ensemble en attente révision",
+                         "Sous-ensemble encours de révision", "Corps de Sous-ensembles disponibles (révisable)"]
+        header_row = None
+        for i in range(len(df)):
+            row = df.iloc[i].astype(str).str.strip()
+            if all(col in row.values for col in target_header):
+                header_row = i
+                break
+
+        if header_row is not None:
+            df_section = pd.read_excel("Cartographie SE par atelier.xlsx", sheet_name=sheet_name, skiprows=header_row)
+            df_section = df_section.dropna(subset=["Equipement", "Sous-ensemble"], how="all")
+            df_section.columns = df_section.columns.str.strip()
+            # Convert numeric columns to appropriate types
+            numeric_cols = ["Quantité SE installée", "Sous-ensemble relais disponible (révisé)",
+                            "Sous-ensemble en attente révision", "Sous-ensemble encours de révision",
+                            "Corps de Sous-ensembles disponibles (révisable)"]
+            for col in numeric_cols:
+                df_section[col] = pd.to_numeric(df_section[col], errors='coerce').fillna(0)
+            return df_section
         else:
-            # For other sheets, check if the first row contains the expected columns
-            target_header = ["Equipement", "Sous-ensemble", "Criticité", "Quantité SE installée", 
-                             "Sous-ensemble relais disponible (révisé)", "Sous-ensemble en attente révision", 
-                             "Sous-ensemble encours de révision", "Corps de Sous-ensembles disponibles (révisable)"]
-            first_row = df.iloc[0].astype(str).str.strip()
-            if all(col in first_row.values for col in target_header):
-                # If the first row is the header, re-read the sheet with the first row as header
-                df = pd.read_excel("ENGINS.xlsx", sheet_name=sheet_name, header=0)
-            # Convert column names to strings and strip whitespace
-            df.columns = df.columns.astype(str).str.strip()
-            return df
-    
-    def load_sheet(self, sheet_name):
+            print(f"Could not find the expected section in sheet {sheet_name}.")
+            return pd.DataFrame()
+
+    # Tab 1: Equipment Overview
+    def setup_equipment_tab(self):
+        layout = QVBoxLayout(self.tab_equipment)
+        layout.setSpacing(10)
+
+        # Sheet selection
+        sheet_frame = QFrame()
+        sheet_frame.setStyleSheet("""
+            QFrame {
+                background-color: #ffffff;
+                border: 1px solid #dfe6e9;
+                border-radius: 5px;
+                padding: 10px;
+            }
+        """)
+        sheet_layout = QHBoxLayout(sheet_frame)
+        sheet_label = QLabel("Select Sheet:")
+        sheet_label.setFont(QFont("Segoe UI", 12))
+        sheet_label.setStyleSheet("color: #2d3436;")
+        sheet_layout.addWidget(sheet_label)
+
+        self.sheet_combo_equipment = QComboBox()
+        self.sheet_combo_equipment.setFont(QFont("Segoe UI", 12))
+        self.sheet_combo_equipment.setStyleSheet("""
+            QComboBox {
+                background-color: #ffffff;
+                border: 1px solid #dfe6e9;
+                padding: 5px;
+                border-radius: 3px;
+                color: #2d3436;
+            }
+            QComboBox::drop-down {
+                border-left: 1px solid #dfe6e9;
+                padding-right: 5px;
+            }
+            QComboBox:hover {
+                border: 1px solid #0984e3;
+            }
+        """)
+        self.sheet_combo_equipment.addItems(list(self.processed_data.keys()))
+        self.sheet_combo_equipment.currentTextChanged.connect(self.load_sheet_equipment)
+        sheet_layout.addWidget(self.sheet_combo_equipment)
+        layout.addWidget(sheet_frame)
+
+        # Installation filter
+        install_frame = QFrame()
+        install_frame.setStyleSheet("""
+            QFrame {
+                background-color: #ffffff;
+                border: 1px solid #dfe6e9;
+                border-radius: 5px;
+                padding: 10px;
+            }
+        """)
+        install_layout = QHBoxLayout(install_frame)
+        install_label = QLabel("Filter by Installation:")
+        install_label.setFont(QFont("Segoe UI", 12))
+        install_label.setStyleSheet("color: #2d3436;")
+        install_layout.addWidget(install_label)
+
+        self.install_combo = QComboBox()
+        self.install_combo.setFont(QFont("Segoe UI", 12))
+        self.install_combo.setStyleSheet("""
+            QComboBox {
+                background-color: #ffffff;
+                border: 1px solid #dfe6e9;
+                padding: 5px;
+                border-radius: 3px;
+                color: #2d3436;
+            }
+            QComboBox::drop-down {
+                border-left: 1px solid #dfe6e9;
+                padding-right: 5px;
+            }
+            QComboBox:hover {
+                border: 1px solid #0984e3;
+            }
+        """)
+        self.install_combo.addItem("All")
+        self.install_combo.currentTextChanged.connect(self.update_equipment_table)
+        install_layout.addWidget(self.install_combo)
+        layout.addWidget(install_frame)
+
+        # Table to display equipment data
+        self.equipment_table = QTableWidget()
+        self.equipment_table.setStyleSheet("""
+            QTableWidget {
+                background-color: #ffffff;
+                border: 1px solid #dfe6e9;
+                border-radius: 5px;
+                gridline-color: #dfe6e9;
+                color: #2d3436;
+            }
+            QTableWidget::item {
+                padding: 5px;
+            }
+            QTableWidget::item:alternate {
+                background-color: #f5f6fa;
+            }
+            QHeaderView::section {
+                background-color: #dfe6e9;
+                color: #2d3436;
+                padding: 5px;
+                border: 1px solid #dfe6e9;
+                font: bold 12pt "Segoe UI";
+            }
+        """)
+        self.equipment_table.setAlternatingRowColors(True)
+        layout.addWidget(self.equipment_table)
+
+        # Load initial sheet
+        if self.sheet_combo_equipment.currentText():
+            self.load_sheet_equipment(self.sheet_combo_equipment.currentText())
+
+    def load_sheet_equipment(self, sheet_name):
         if sheet_name:
             self.df = self.processed_data[sheet_name]
             if not self.df.empty:
-                # Update equipment dropdown
+                # Update installation dropdown
+                installations = sorted(self.df.get("Unnamed: 0", pd.Series([])).dropna().unique())
+                self.install_combo.clear()
+                self.install_combo.addItem("All")
+                self.install_combo.addItems(installations)
+                self.update_equipment_table()
+            else:
+                QMessageBox.critical(self, "Error", f"No valid data found in sheet {sheet_name}.")
+
+    def update_equipment_table(self):
+        if self.df is None:
+            return
+
+        # Filter by installation
+        install_filter = self.install_combo.currentText()
+        if install_filter == "All":
+            filtered_df = self.df
+        else:
+            filtered_df = self.df[self.df["Unnamed: 0"] == install_filter]
+
+        # Set up table
+        self.equipment_table.clear()
+        columns = ["Equipement", "Sous-ensemble", "Quantité SE installée",
+                   "Sous-ensemble relais disponible (révisé)", "Sous-ensemble en attente révision",
+                   "Sous-ensemble encours de révision", "Corps de Sous-ensembles disponibles (révisable)"]
+        self.equipment_table.setColumnCount(len(columns))
+        self.equipment_table.setHorizontalHeaderLabels(columns)
+        self.equipment_table.setRowCount(len(filtered_df))
+
+        # Populate table
+        for row_idx, (_, row) in enumerate(filtered_df.iterrows()):
+            for col_idx, col in enumerate(columns):
+                item = QTableWidgetItem(str(row[col]))
+                item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)  # Make cells read-only
+                self.equipment_table.setItem(row_idx, col_idx, item)
+
+        self.equipment_table.resizeColumnsToContents()
+
+    # Tab 2: Update Data
+    def setup_update_tab(self):
+        layout = QVBoxLayout(self.tab_update)
+        layout.setSpacing(15)
+
+        # Sheet selection
+        sheet_frame = QFrame()
+        sheet_frame.setStyleSheet("""
+            QFrame {
+                background-color: #ffffff;
+                border: 1px solid #dfe6e9;
+                border-radius: 5px;
+                padding: 10px;
+            }
+        """)
+        sheet_layout = QHBoxLayout(sheet_frame)
+        sheet_label = QLabel("Select Sheet:")
+        sheet_label.setFont(QFont("Segoe UI", 12))
+        sheet_label.setStyleSheet("color: #2d3436;")
+        sheet_layout.addWidget(sheet_label)
+
+        self.sheet_combo_update = QComboBox()
+        self.sheet_combo_update.setFont(QFont("Segoe UI", 12))
+        self.sheet_combo_update.setStyleSheet("""
+            QComboBox {
+                background-color: #ffffff;
+                border: 1px solid #dfe6e9;
+                padding: 5px;
+                border-radius: 3px;
+                color: #2d3436;
+            }
+            QComboBox::drop-down {
+                border-left: 1px solid #dfe6e9;
+                padding-right: 5px;
+            }
+            QComboBox:hover {
+                border: 1px solid #0984e3;
+            }
+        """)
+        self.sheet_combo_update.addItems(list(self.processed_data.keys()))
+        self.sheet_combo_update.currentTextChanged.connect(self.load_sheet_update)
+        sheet_layout.addWidget(self.sheet_combo_update)
+        layout.addWidget(sheet_frame)
+
+        # Input frame
+        self.input_frame = QFrame()
+        self.input_frame.setStyleSheet("""
+            QFrame {
+                background-color: #ffffff;
+                border: 1px solid #dfe6e9;
+                border-radius: 5px;
+                padding: 15px;
+            }
+        """)
+        input_layout = QVBoxLayout(self.input_frame)
+        input_layout.setSpacing(10)
+
+        # Equipment selection
+        equipment_row = QHBoxLayout()
+        equipment_label = QLabel("Select Equipment:")
+        equipment_label.setFont(QFont("Segoe UI", 12))
+        equipment_label.setStyleSheet("color: #2d3436;")
+        equipment_row.addWidget(equipment_label)
+
+        self.equipment_combo = QComboBox()
+        self.equipment_combo.setFont(QFont("Segoe UI", 12))
+        self.equipment_combo.setStyleSheet("""
+            QComboBox {
+                background-color: #ffffff;
+                border: 1px solid #dfe6e9;
+                padding: 5px;
+                border-radius: 3px;
+                color: #2d3436;
+            }
+            QComboBox::drop-down {
+                border-left: 1px solid #dfe6e9;
+                padding-right: 5px;
+            }
+            QComboBox:hover {
+                border: 1px solid #0984e3;
+            }
+        """)
+        self.equipment_combo.currentTextChanged.connect(self.update_sous_ensemble)
+        equipment_row.addWidget(self.equipment_combo)
+        input_layout.addLayout(equipment_row)
+
+        # Sous-ensemble selection
+        sous_ensemble_row = QHBoxLayout()
+        sous_ensemble_label = QLabel("Select Sous-ensemble:")
+        sous_ensemble_label.setFont(QFont("Segoe UI", 12))
+        sous_ensemble_label.setStyleSheet("color: #2d3436;")
+        sous_ensemble_row.addWidget(sous_ensemble_label)
+
+        self.sous_ensemble_combo = QComboBox()
+        self.sous_ensemble_combo.setFont(QFont("Segoe UI", 12))
+        self.sous_ensemble_combo.setStyleSheet("""
+            QComboBox {
+                background-color: #ffffff;
+                border: 1px solid #dfe6e9;
+                padding: 5px;
+                border-radius: 3px;
+                color: #2d3436;
+            }
+            QComboBox::drop-down {
+                border-left: 1px solid #dfe6e9;
+                padding-right: 5px;
+            }
+            QComboBox:hover {
+                border: 1px solid #0984e3;
+            }
+        """)
+        self.sous_ensemble_combo.currentTextChanged.connect(self.display_data)
+        sous_ensemble_row.addWidget(self.sous_ensemble_combo)
+        input_layout.addLayout(sous_ensemble_row)
+
+        # Data display frame
+        self.data_frame = QFrame()
+        self.data_frame.setStyleSheet("""
+            QFrame {
+                background-color: #f5f6fa;
+                border: 1px solid #dfe6e9;
+                border-radius: 5px;
+                padding: 10px;
+            }
+        """)
+        data_layout = QVBoxLayout(self.data_frame)
+        data_layout.setContentsMargins(10, 10, 10, 10)
+        data_layout.setSpacing(10)
+
+        self.labels = {}
+        self.columns_to_display = [
+            "Quantité SE installée", "Sous-ensemble relais disponible (révisé)",
+            "Sous-ensemble en attente révision", "Sous-ensemble encours de révision",
+            "Corps de Sous-ensembles disponibles (révisable)"
+        ]
+
+        for col in self.columns_to_display:
+            row_layout = QHBoxLayout()
+            label = QLabel(f"{col}:")
+            label.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
+            label.setStyleSheet("color: #2d3436;")
+            row_layout.addWidget(label)
+
+            entry = QLineEdit()
+            entry.setFont(QFont("Segoe UI", 12))
+            entry.setStyleSheet("""
+                QLineEdit {
+                    background-color: #ffffff;
+                    border: 1px solid #dfe6e9;
+                    padding: 5px;
+                    border-radius: 3px;
+                    color: #2d3436;
+                }
+                QLineEdit:hover {
+                    border: 1px solid #0984e3;
+                }
+            """)
+            entry.setFixedHeight(35)
+            row_layout.addWidget(entry)
+
+            self.labels[col] = entry
+            data_layout.addLayout(row_layout)
+
+        input_layout.addWidget(self.data_frame)
+        layout.addWidget(self.input_frame)
+
+        # Save button
+        save_button = QPushButton("Save Changes")
+        save_button.setFont(QFont("Segoe UI", 12))
+        save_button.setStyleSheet("""
+            QPushButton {
+                background-color: #0984e3;
+                color: #ffffff;
+                padding: 10px 20px;
+                border-radius: 5px;
+                border: none;
+                font: bold 12pt "Segoe UI";
+            }
+            QPushButton:hover {
+                background-color: #0870c2;
+            }
+            QPushButton:pressed {
+                background-color: #065aa1;
+            }
+        """)
+        save_button.clicked.connect(self.save_data)
+        layout.addWidget(save_button, alignment=Qt.AlignmentFlag.AlignCenter)
+
+        # Load initial sheet
+        if self.sheet_combo_update.currentText():
+            self.load_sheet_update(self.sheet_combo_update.currentText())
+
+    def load_sheet_update(self, sheet_name):
+        if sheet_name:
+            self.df = self.processed_data[sheet_name]
+            if not self.df.empty:
                 equipment_list = sorted(self.df["Equipement"].dropna().unique())
                 self.equipment_combo.clear()
                 self.equipment_combo.addItems(equipment_list)
@@ -197,51 +479,205 @@ class EquipmentApp(QMainWindow):
                 self.clear_data_fields()
             else:
                 QMessageBox.critical(self, "Error", f"No valid data found in sheet {sheet_name}.")
-    
+
     def update_sous_ensemble(self, equipment):
         if equipment and self.df is not None:
             sous_ensemble_list = sorted(self.df[self.df["Equipement"] == equipment]["Sous-ensemble"].dropna().unique())
             self.sous_ensemble_combo.clear()
             self.sous_ensemble_combo.addItems(sous_ensemble_list)
             self.clear_data_fields()
-    
+
     def display_data(self, sous_ensemble):
         equipment = self.equipment_combo.currentText()
         if equipment and sous_ensemble and self.df is not None:
-            row = self.df[(self.df["Equipement"] == equipment) & 
+            row = self.df[(self.df["Equipement"] == equipment) &
                           (self.df["Sous-ensemble"] == sous_ensemble)]
             if not row.empty:
                 for col, entry in self.labels.items():
                     entry.setText(str(row[col].values[0]))
-    
+
     def clear_data_fields(self):
         for entry in self.labels.values():
             entry.clear()
-    
+
     def save_data(self):
-        sheet_name = self.sheet_combo.currentText()
+        sheet_name = self.sheet_combo_update.currentText()
         equipment = self.equipment_combo.currentText()
         sous_ensemble = self.sous_ensemble_combo.currentText()
-        
+
         if sheet_name and equipment and sous_ensemble and self.df is not None:
-            idx = self.df[(self.df["Equipement"] == equipment) & 
+            idx = self.df[(self.df["Equipement"] == equipment) &
                           (self.df["Sous-ensemble"] == sous_ensemble)].index
             if not idx.empty:
+                # Validate inputs
                 for col, entry in self.labels.items():
-                    self.df.at[idx[0], col] = entry.text()
+                    try:
+                        value = float(entry.text()) if entry.text() else 0
+                        if value < 0:
+                            QMessageBox.critical(self, "Error", f"Value for {col} cannot be negative.")
+                            return
+                        self.df.at[idx[0], col] = value
+                    except ValueError:
+                        QMessageBox.critical(self, "Error", f"Invalid value for {col}. Please enter a number.")
+                        return
+
                 try:
-                    with pd.ExcelWriter("ENGINS.xlsx", engine="openpyxl", mode="a", if_sheet_exists="replace") as writer:
+                    with pd.ExcelWriter("Cartographie SE par atelier.xlsx", engine="openpyxl", mode="a", if_sheet_exists="replace") as writer:
                         for sheet, sheet_data in self.processed_data.items():
                             if sheet == sheet_name:
                                 sheet_data = self.df
                             sheet_data.to_excel(writer, sheet_name=sheet, index=False)
                     QMessageBox.information(self, "Success", "Data saved successfully!")
+                    # Refresh the equipment table and dashboard
+                    self.load_sheet_equipment(self.sheet_combo_equipment.currentText())
+                    self.update_dashboard()
                 except Exception as e:
                     QMessageBox.critical(self, "Error", f"Failed to save data: {e}")
             else:
                 QMessageBox.critical(self, "Error", "Selected equipment and sous-ensemble not found in data.")
         else:
             QMessageBox.critical(self, "Error", "Please select a sheet, equipment, and sous-ensemble.")
+
+    # Tab 3: Dashboard
+    def setup_dashboard_tab(self):
+        layout = QVBoxLayout(self.tab_dashboard)
+        layout.setSpacing(15)
+
+        # Sheet selection for dashboard
+        sheet_frame = QFrame()
+        sheet_frame.setStyleSheet("""
+            QFrame {
+                background-color: #ffffff;
+                border: 1px solid #dfe6e9;
+                border-radius: 5px;
+                padding: 10px;
+            }
+        """)
+        sheet_layout = QHBoxLayout(sheet_frame)
+        sheet_label = QLabel("Select Sheet:")
+        sheet_label.setFont(QFont("Segoe UI", 12))
+        sheet_label.setStyleSheet("color: #2d3436;")
+        sheet_layout.addWidget(sheet_label)
+
+        self.sheet_combo_dashboard = QComboBox()
+        self.sheet_combo_dashboard.setFont(QFont("Segoe UI", 12))
+        self.sheet_combo_dashboard.setStyleSheet("""
+            QComboBox {
+                background-color: #ffffff;
+                border: 1px solid #dfe6e9;
+                padding: 5px;
+                border-radius: 3px;
+                color: #2d3436;
+            }
+            QComboBox::drop-down {
+                border-left: 1px solid #dfe6e9;
+                padding-right: 5px;
+            }
+            QComboBox:hover {
+                border: 1px solid #0984e3;
+            }
+        """)
+        self.sheet_combo_dashboard.addItems(list(self.processed_data.keys()))
+        self.sheet_combo_dashboard.currentTextChanged.connect(self.update_dashboard)
+        sheet_layout.addWidget(self.sheet_combo_dashboard)
+        layout.addWidget(sheet_frame)
+
+        # Dashboard content
+        self.dashboard_frame = QFrame()
+        self.dashboard_frame.setStyleSheet("""
+            QFrame {
+                background-color: #ffffff;
+                border: 1px solid #dfe6e9;
+                border-radius: 5px;
+                padding: 15px;
+            }
+        """)
+        dashboard_layout = QVBoxLayout(self.dashboard_frame)
+        dashboard_layout.setSpacing(10)
+
+        # Statistics
+        self.stats_label = QLabel("Statistics:")
+        self.stats_label.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
+        self.stats_label.setStyleSheet("color: #2d3436; margin-bottom: 5px;")
+        dashboard_layout.addWidget(self.stats_label)
+
+        self.stats_text = QLabel()
+        self.stats_text.setFont(QFont("Segoe UI", 12))
+        self.stats_text.setStyleSheet("color: #2d3436; background-color: #f5f6fa; padding: 10px; border-radius: 5px;")
+        dashboard_layout.addWidget(self.stats_text)
+
+        # Alerts
+        self.alerts_label = QLabel("Alerts:")
+        self.alerts_label.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
+        self.alerts_label.setStyleSheet("color: #2d3436; margin-top: 10px; margin-bottom: 5px;")
+        dashboard_layout.addWidget(self.alerts_label)
+
+        self.alerts_area = QScrollArea()
+        self.alerts_area.setWidgetResizable(True)
+        self.alerts_area.setStyleSheet("""
+            QScrollArea {
+                background-color: #f5f6fa;
+                border: 1px solid #dfe6e9;
+                border-radius: 5px;
+            }
+        """)
+        self.alerts_widget = QWidget()
+        self.alerts_layout = QVBoxLayout(self.alerts_widget)
+        self.alerts_area.setWidget(self.alerts_widget)
+        dashboard_layout.addWidget(self.alerts_area)
+
+        layout.addWidget(self.dashboard_frame)
+
+        # Load initial dashboard
+        if self.sheet_combo_dashboard.currentText():
+            self.update_dashboard()
+
+    def update_dashboard(self):
+        sheet_name = self.sheet_combo_dashboard.currentText()
+        if not sheet_name or sheet_name not in self.processed_data:
+            return
+
+        df = self.processed_data[sheet_name]
+        if df.empty:
+            self.stats_text.setText("No data available.")
+            return
+
+        # Calculate statistics
+        total_equipments = len(df["Equipement"].unique())
+        total_sous_ensembles = len(df)
+        awaiting_revision = int(df["Sous-ensemble en attente révision"].sum())
+        in_progress = int(df["Sous-ensemble encours de révision"].sum())
+        stats = (
+            f"Total Equipments: {total_equipments}\n"
+            f"Total Sous-ensembles: {total_sous_ensembles}\n"
+            f"Sous-ensembles Awaiting Revision: {awaiting_revision}\n"
+            f"Sous-ensembles In Progress: {in_progress}"
+        )
+        self.stats_text.setText(stats)
+
+        # Clear previous alerts
+        for i in reversed(range(self.alerts_layout.count())):
+            widget = self.alerts_layout.itemAt(i).widget()
+            if widget:
+                widget.deleteLater()
+
+        # Generate alerts
+        critical_rows = df[
+            (df["Sous-ensemble relais disponible (révisé)"] == 0) &
+            (df["Sous-ensemble en attente révision"] > 0)
+        ]
+        for _, row in critical_rows.iterrows():
+            alert = f"Critical: {row['Equipement']} - {row['Sous-ensemble']} has 0 available and {row['Sous-ensemble en attente révision']} awaiting revision."
+            alert_label = QLabel(alert)
+            alert_label.setFont(QFont("Segoe UI", 12))
+            alert_label.setStyleSheet("color: #d63031; padding: 5px; background-color: #ffcccc; border-radius: 3px;")
+            self.alerts_layout.addWidget(alert_label)
+
+        if critical_rows.empty:
+            no_alert = QLabel("No critical alerts.")
+            no_alert.setFont(QFont("Segoe UI", 12))
+            no_alert.setStyleSheet("color: #2d3436; padding: 5px; background-color: #e6ffed; border-radius: 3px;")
+            self.alerts_layout.addWidget(no_alert)
 
 def main():
     app = QApplication(sys.argv)
