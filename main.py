@@ -1,7 +1,8 @@
 import sys
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QLabel, QComboBox, QPushButton, QLineEdit, QFrame, QMessageBox,
-                             QTableWidget, QTableWidgetItem, QTabWidget, QScrollArea)
+                             QTableWidget, QTableWidgetItem, QTabWidget, QScrollArea, QCheckBox, QButtonGroup, QRadioButton)
+
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont
 import pandas as pd
@@ -160,6 +161,12 @@ class EquipmentApp(QMainWindow):
         self.tab_dashboard = QWidget()
         self.tabs.addTab(self.tab_dashboard, "Dashboard")
         self.setup_dashboard_tab()
+
+        # Tab 3: Dashboard
+        self.tab_workflow = QWidget()
+        self.tabs.addTab(self.tab_workflow, "Workflow")
+        self.setup_workflow_tab()
+
 
     def preprocess_sheet(self, df, sheet_name):
         if df.empty:
@@ -808,6 +815,231 @@ class EquipmentApp(QMainWindow):
         # Load initial dashboard
         if self.sheet_combo_dashboard.currentText():
             self.update_dashboard()
+
+    def setup_workflow_tab(self):
+        layout = QVBoxLayout(self.tab_workflow)
+        layout.setSpacing(15)
+
+        # Sheet selection for dashboard
+        sheet_frame = QFrame()
+        sheet_frame.setStyleSheet("""
+            QFrame {
+                background-color: #ffffff;
+                border: 1px solid #dfe6e9;
+                border-radius: 5px;
+                padding: 10px;
+            }
+        """)
+        sheet_layout = QHBoxLayout(sheet_frame)
+        sheet_label = QLabel("Select Sheet:")
+        sheet_label.setFont(QFont("Segoe UI", 12))
+        sheet_label.setStyleSheet("color: #2d3436;")
+        sheet_layout.addWidget(sheet_label)
+
+        self.sheet_combo_dashboard = QComboBox()
+        self.sheet_combo_dashboard.setFont(QFont("Segoe UI", 12))
+        self.sheet_combo_dashboard.setStyleSheet("""
+            QComboBox {
+                background-color: #ffffff;
+                border: 1px solid #dfe6e9;
+                padding: 5px;
+                border-radius: 3px;
+                color: #2d3436;
+            }
+            QComboBox::drop-down {
+                border-left: 1px solid #dfe6e9;
+                padding-right: 5px;
+            }
+            QComboBox:hover {
+                border: 1px solid #0984e3;
+            }
+        """)
+        self.sheet_combo_dashboard.addItems(list(self.processed_data.keys()))
+        self.sheet_combo_dashboard.currentTextChanged.connect(self.update_dashboard)
+        sheet_layout.addWidget(self.sheet_combo_dashboard)
+        layout.addWidget(sheet_frame)
+
+        # Checklist for revision process
+        checklist_frame = QFrame()
+        checklist_frame.setStyleSheet("""
+            QFrame {
+                background-color: #ffffff;
+                border: 1px solid #dfe6e9;
+                border-radius: 5px;
+                padding: 10px;
+            }
+        """)
+        checklist_layout = QVBoxLayout(checklist_frame)
+        
+        checklist_label = QLabel("S/E Revision Process Workflow:")
+        checklist_label.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
+        checklist_label.setStyleSheet("color: #2d3436; margin-bottom: 10px;")
+        checklist_layout.addWidget(checklist_label)
+
+        # Dictionary to store widget states
+        self.checklist_widgets = {}
+        self.radio_groups = {}
+
+        # Helper function to create a step label
+        def create_step_label(text, indent=0):
+            step_frame = QFrame()
+            step_frame.setStyleSheet("""
+                QFrame {
+                    border: 1px solid #dfe6e9;
+                    border-radius: 3px;
+                    padding: 5px;
+                    background-color: #f8f9fa;
+                }
+            """)
+            step_layout = QHBoxLayout(step_frame)
+            step_layout.setContentsMargins(indent * 20, 2, 2, 2)
+            label = QLabel(text)
+            label.setFont(QFont("Segoe UI", 11))
+            label.setStyleSheet("color: #2d3436; border: none;")
+            step_layout.addWidget(label)
+            return step_frame
+
+        # Helper function to create a decision point with Oui/Non radio buttons
+        def create_decision_point(text, indent=0):
+            decision_frame = QFrame()
+            decision_frame.setStyleSheet("""
+                QFrame {
+                    border: 1px solid #0984e3;
+                    border-radius: 3px;
+                    padding: 5px;
+                    background-color: #e7f3ff;
+                }
+            """)
+            decision_layout = QVBoxLayout(decision_frame)
+            decision_layout.setContentsMargins(indent * 20, 2, 2, 2)
+            
+            label = QLabel(text)
+            label.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+            label.setStyleSheet("color: #2d3436; border: none;")
+            decision_layout.addWidget(label)
+
+            radio_layout = QHBoxLayout()
+            group = QButtonGroup(decision_frame)
+            oui_radio = QRadioButton("Oui")
+            non_radio = QRadioButton("Non")
+            oui_radio.setFont(QFont("Segoe UI", 10))
+            non_radio.setFont(QFont("Segoe UI", 10))
+            oui_radio.setStyleSheet("color: #2d3436; padding: 2px;")
+            non_radio.setStyleSheet("color: #2d3436; padding: 2px;")
+            group.addButton(oui_radio)
+            group.addButton(non_radio)
+            radio_layout.addWidget(oui_radio)
+            radio_layout.addWidget(non_radio)
+            decision_layout.addLayout(radio_layout)
+
+            return decision_frame, group, oui_radio, non_radio
+
+        # Build the workflow following the diagram
+        # Step 1: Expert S/E à réviser
+        step1 = create_step_label("Expert S/E à réviser")
+        checklist_layout.addWidget(step1)
+        self.checklist_widgets["Expert S/E à réviser"] = step1
+
+        # Decision 1: Besoin en PDR?
+        decision1, group1, oui1, non1 = create_decision_point("Besoin en PDR?")
+        checklist_layout.addWidget(decision1)
+        self.radio_groups["Besoin en PDR?"] = (group1, oui1, non1)
+
+        # Oui path for Decision 1
+        oui_frame1 = QFrame()
+        oui_layout1 = QVBoxLayout(oui_frame1)
+        step2 = create_step_label("Identification S/E et besoin en PDR, équipement, logistique", indent=1)
+        oui_layout1.addWidget(step2)
+        self.checklist_widgets["Identification S/E et besoin en PDR, équipement, logistique"] = step2
+
+        # Decision 2: Besoin en MEC?
+        decision2, group2, oui2, non2 = create_decision_point("Besoin en MEC?", indent=1)
+        oui_layout1.addWidget(decision2)
+        self.radio_groups["Besoin en MEC?"] = (group2, oui2, non2)
+
+        # Oui path for Decision 2
+        oui_frame2 = QFrame()
+        oui_layout2 = QVBoxLayout(oui_frame2)
+        step3 = create_step_label("Récupération équipement", indent=2)
+        oui_layout2.addWidget(step3)
+        self.checklist_widgets["Récupération équipement"] = step3
+        oui_layout1.addWidget(oui_frame2)
+        oui_frame2.setVisible(False)  # Initially hidden
+
+        checklist_layout.addWidget(oui_frame1)
+        oui_frame1.setVisible(False)  # Initially hidden
+
+        # Processus de préparation (common path)
+        step4 = create_step_label("Processus de préparation")
+        checklist_layout.addWidget(step4)
+        self.checklist_widgets["Processus de préparation"] = step4
+
+        step5 = create_step_label("Récupération Bon sortie OT une fois la fiche de préparation est en position sur le tableau de préparation.")
+        checklist_layout.addWidget(step5)
+        self.checklist_widgets["Récupération Bon sortie OT"] = step5
+
+        # Decision 3: S/E critique?
+        decision3, group3, oui3, non3 = create_decision_point("S/E critique (Moteur thermique, moteur de roue, redacteur, Tracks...)")
+        checklist_layout.addWidget(decision3)
+        self.radio_groups["S/E critique"] = (group3, oui3, non3)
+
+        # Oui path for Decision 3
+        oui_frame3 = QFrame()
+        oui_layout3 = QVBoxLayout(oui_frame3)
+        step6 = create_step_label("Établissement d'un planning de révision", indent=1)
+        oui_layout3.addWidget(step6)
+        self.checklist_widgets["Établissement d'un planning de révision"] = step6
+        checklist_layout.addWidget(oui_frame3)
+        oui_frame3.setVisible(False)  # Initially hidden
+
+        # Decision 4: Intervention nécessitant un outillage ou un réglage spécifique?
+        decision4, group4, oui4, non4 = create_decision_point("Intervention nécessitant un outillage ou un réglage spécifique ou présenté pour le personnel ?")
+        checklist_layout.addWidget(decision4)
+        self.radio_groups["Intervention spécifique"] = (group4, oui4, non4)
+
+        # Oui path for Decision 4
+        oui_frame4 = QFrame()
+        oui_layout4 = QVBoxLayout(oui_frame4)
+        step7 = create_step_label("Préparation G.O.", indent=1)
+        oui_layout4.addWidget(step7)
+        self.checklist_widgets["Préparation G.O."] = step7
+        checklist_layout.addWidget(oui_frame4)
+        oui_frame4.setVisible(False)  # Initially hidden
+
+        # Final steps
+        step8 = create_step_label("Lancement des travaux de révision S/E")
+        checklist_layout.addWidget(step8)
+        self.checklist_widgets["Lancement des travaux de révision S/E"] = step8
+
+        step9 = create_step_label("Instruction de la carte d'identification du S/E et la déplacer dans la zone (En cours de révision)")
+        checklist_layout.addWidget(step9)
+        self.checklist_widgets["Instruction de la carte d'identification"] = step9
+
+        # Connect radio buttons to show/hide relevant sections
+        oui1.toggled.connect(lambda checked: oui_frame1.setVisible(checked))
+        oui2.toggled.connect(lambda checked: oui_frame2.setVisible(checked))
+        oui3.toggled.connect(lambda checked: oui_frame3.setVisible(checked))
+        oui4.toggled.connect(lambda checked: oui_frame4.setVisible(checked))
+
+        # Load previous states if any
+        self.load_checklist_states()
+
+        layout.addWidget(checklist_frame)
+
+    def save_checklist_state(self, step, state):
+        # Placeholder for storage
+        if step in self.checklist_widgets:
+            self.checklist_widgets[step].setEnabled(bool(state))
+        elif step in self.radio_groups:
+            group, oui, non = self.radio_groups[step]
+            if state == "Oui":
+                oui.setChecked(True)
+            elif state == "Non":
+                non.setChecked(True)
+
+    def load_checklist_states(self):
+        # Placeholder for loading
+        pass
 
     def update_dashboard(self):
         sheet_name = self.sheet_combo_dashboard.currentText()
