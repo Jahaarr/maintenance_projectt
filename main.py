@@ -49,11 +49,82 @@ class EquipmentApp(QMainWindow):
 
         # Load the Excel file with multiple sheets
         try:
-            self.excel_data = pd.read_excel("Cartographie SE par atelier.xlsx", sheet_name=None, header=None)
+            self.excel_data = pd.read_excel("ENGINS.xlsx", sheet_name=None, header=None)
         except FileNotFoundError:
             self.excel_data = {}
-            QMessageBox.critical(self, "Error", "Excel file 'Cartographie SE par atelier.xlsx' not found.")
+            QMessageBox.critical(self, "Error", "Excel file 'ENGINS.xlsx' not found.")
             return
+
+        # Define expected headers for each sheet type
+        self.sheet_configs = {
+            "Park engin": {
+                "headers": ["Equipement", "MLE", "DMS", "TYPE", "N° DES SERIES", "SITUATION"],
+                "numeric_cols": [],
+                "filter_col": "SITUATION"
+            },
+            "Cartographie moteur": {
+                "headers": ["Equipement", "Sous-ensemble", "Criticité", "Quantité SE installée",
+                            "Sous-ensemble relais disponible (révisé)", "Sous-ensemble en attente révision",
+                            "Sous-ensemble encours de révision", "Corps de Sous-ensembles disponibles (révisable)"],
+                "numeric_cols": ["Quantité SE installée", "Sous-ensemble relais disponible (révisé)",
+                                 "Sous-ensemble en attente révision", "Sous-ensemble encours de révision",
+                                 "Corps de Sous-ensembles disponibles (révisable)"],
+                "filter_col": "Criticité"
+            },
+            "Cartographie transmission": {
+                "headers": ["Equipement", "Sous-ensemble", "Criticité", "Quantité SE installée",
+                            "Sous-ensemble relais disponible (révisé)", "Sous-ensemble en attente révision",
+                            "Sous-ensemble encours de révision", "Corps de Sous-ensembles disponibles (révisable)"],
+                "numeric_cols": ["Quantité SE installée", "Sous-ensemble relais disponible (révisé)",
+                                 "Sous-ensemble en attente révision", "Sous-ensemble encours de révision",
+                                 "Corps de Sous-ensembles disponibles (révisable)"],
+                "filter_col": "Criticité"
+            },
+            "Cartographie Engin": {
+                "headers": ["Equipement", "Sous-ensemble", "Criticité", "Quantité SE installée",
+                            "Sous-ensemble relais disponible (révisé)", "Sous-ensemble en attente révision",
+                            "Sous-ensemble encours de révision", "Corps de Sous-ensembles disponibles (révisable)"],
+                "numeric_cols": ["Quantité SE installée", "Sous-ensemble relais disponible (révisé)",
+                                 "Sous-ensemble en attente révision", "Sous-ensemble encours de révision",
+                                 "Corps de Sous-ensembles disponibles (révisable)"],
+                "filter_col": "Criticité"
+            },
+            "Performances BG": {
+                "headers": ["équipement", "Sous-ensemble", "date de changement 1", "OT", "Compteur de changement 1",
+                            "date de changement 2", "OT", "Compteur de changement 2", "date de changement 3", "OT",
+                            "Compteur de changement 3", "date de changement 4", "OT", "Compteur de changement 4",
+                            "date de changement 5", "OT", "Compteur de changement 5", "date de changement 6", "OT",
+                            "Compteur de changement 6", "compteur actuel S45/2024", "PERFORMANCE"],
+                "numeric_cols": ["Compteur de changement 1", "Compteur de changement 2", "Compteur de changement 3",
+                                 "Compteur de changement 4", "Compteur de changement 5", "Compteur de changement 6",
+                                 "compteur actuel S45/2024", "PERFORMANCE"],
+                "filter_col": None
+            },
+            "Performances YSF": {
+                "headers": ["équipement", "Sous-ensemble", "date de changement 1", "OT", "Compteur de changement 1",
+                            "date de changement 2", "OT", "Compteur de changement 2", "date de changement 3", "OT",
+                            "Compteur de changement 3", "date de changement 4", "OT", "Compteur de changement 4",
+                            "date de changement 5", "OT", "Compteur de changement 5", "date de changement 6", "OT",
+                            "Compteur de changement 6", "compteur actuel S45/2024", "PERFORMANCE"],
+                "numeric_cols": ["Compteur de changement 1", "Compteur de changement 2", "Compteur de changement 3",
+                                 "Compteur de changement 4", "Compteur de changement 5", "Compteur de changement 6",
+                                 "compteur actuel S45/2024", "PERFORMANCE"],
+                "filter_col": None
+            },
+            "Programme 2025 BG": {
+                "headers": ["Type d'engin", "Equipement", "Sous-ensemble", "Qte v1", "Qte v2", "Qte v3",
+                            "Devis unitaire", "Cout V2", "Cout V3", "Commentaire", "SECTION AFFECTATION"],
+                "numeric_cols": ["Qte v1", "Qte v2", "Qte v3", "Devis unitaire", "Cout V2", "Cout V3"],
+                "filter_col": "SECTION AFFECTATION"
+            },
+            "Programme 2025 YSF": {
+                "headers": ["Equipement", "Engin", "REP", "Sous ensemble", "Seuil HM", "HM cumulés",
+                            "Devis unitaire", "Qte [V1]", "Cout V1", "Qte [V2]", "Cout [V2]", "OBS",
+                            "SECTION AFFECTATION"],
+                "numeric_cols": ["Seuil HM", "HM cumulés", "Devis unitaire", "Qte [V1]", "Cout V1", "Qte [V2]", "Cout [V2]"],
+                "filter_col": "SECTION AFFECTATION"
+            }
+        }
 
         # Preprocess sheets to extract relevant sections
         self.processed_data = {}
@@ -62,6 +133,7 @@ class EquipmentApp(QMainWindow):
 
         # Current sheet data
         self.df = None
+        self.current_sheet_config = None
 
         # Title
         title_label = QLabel("Equipment Data Management")
@@ -101,27 +173,54 @@ class EquipmentApp(QMainWindow):
             print(f"Sheet {sheet_name} is empty. Skipping preprocessing.")
             return pd.DataFrame()
 
-        # Find the header row
-        target_header = ["Equipement", "Sous-ensemble", "Quantité SE installée",
-                         "Sous-ensemble relais disponible (révisé)", "Sous-ensemble en attente révision",
-                         "Sous-ensemble encours de révision", "Corps de Sous-ensembles disponibles (révisable)"]
+        # Check if the sheet is in the configuration
+        if sheet_name not in self.sheet_configs:
+            print(f"Unknown sheet: {sheet_name}. Skipping preprocessing.")
+            return pd.DataFrame()
+
+        config = self.sheet_configs[sheet_name]
+        target_headers = config["headers"]
+
+        # Find the header row by checking for a row that contains all target headers
         header_row = None
-        for i in range(len(df)):
+        for i in range(min(10, len(df))):  # Check up to the first 10 rows to skip metadata
             row = df.iloc[i].astype(str).str.strip()
-            if all(col in row.values for col in target_header):
+            # Clean the row values to handle special characters and newlines
+            row = row.str.replace(r'\n', ' ').str.replace(r'\s+', ' ', regex=True)
+            if all(any(col in val for val in row.values) for col in target_headers):
                 header_row = i
                 break
 
         if header_row is not None:
-            df_section = pd.read_excel("Cartographie SE par atelier.xlsx", sheet_name=sheet_name, skiprows=header_row)
-            df_section = df_section.dropna(subset=["Equipement", "Sous-ensemble"], how="all")
-            df_section.columns = df_section.columns.str.strip()
+            # Read the sheet again, starting from the header row
+            df_section = pd.read_excel("ENGINS.xlsx", sheet_name=sheet_name, skiprows=header_row)
+            # Clean column names
+            df_section.columns = df_section.columns.str.strip().str.replace(r'\n', ' ').str.replace(r'\s+', ' ', regex=True)
+            # Ensure all expected headers are present, fill missing ones with NaN
+            for col in target_headers:
+                if col not in df_section.columns:
+                    df_section[col] = pd.NA
+            # Reorder columns to match target_headers
+            df_section = df_section[target_headers]
+            # Drop rows where the first column is NaN
+            df_section = df_section.dropna(subset=[target_headers[0]], how="all")
             # Convert numeric columns to appropriate types
-            numeric_cols = ["Quantité SE installée", "Sous-ensemble relais disponible (révisé)",
-                            "Sous-ensemble en attente révision", "Sous-ensemble encours de révision",
-                            "Corps de Sous-ensembles disponibles (révisable)"]
-            for col in numeric_cols:
-                df_section[col] = pd.to_numeric(df_section[col], errors='coerce').fillna(0)
+            for col in config["numeric_cols"]:
+                if col in df_section.columns:
+                    df_section[col] = pd.to_numeric(df_section[col], errors='coerce').fillna(0)
+
+            # Add a Section column for BG and YSF in specific sheets
+            if sheet_name in ["Cartographie moteur", "Cartographie transmission", "Cartographie Engin"]:
+                df_section['Section'] = pd.NA
+                current_section = None
+                for idx, row in df_section.iterrows():
+                    if row['Equipement'] in ['BG', 'YSF']:
+                        current_section = row['Equipement']
+                    else:
+                        df_section.at[idx, 'Section'] = current_section
+                # Drop rows that are section headers (BG or YSF)
+                df_section = df_section[~df_section['Equipement'].isin(['BG', 'YSF'])]
+
             return df_section
         else:
             print(f"Could not find the expected section in sheet {sheet_name}.")
@@ -171,9 +270,9 @@ class EquipmentApp(QMainWindow):
         sheet_layout.addWidget(self.sheet_combo_equipment)
         layout.addWidget(sheet_frame)
 
-        # Installation filter
-        install_frame = QFrame()
-        install_frame.setStyleSheet("""
+        # Section filter frame (for BG/YSF)
+        section_frame = QFrame()
+        section_frame.setStyleSheet("""
             QFrame {
                 background-color: #ffffff;
                 border: 1px solid #dfe6e9;
@@ -181,15 +280,15 @@ class EquipmentApp(QMainWindow):
                 padding: 10px;
             }
         """)
-        install_layout = QHBoxLayout(install_frame)
-        install_label = QLabel("Filter by Installation:")
-        install_label.setFont(QFont("Segoe UI", 12))
-        install_label.setStyleSheet("color: #2d3436;")
-        install_layout.addWidget(install_label)
+        section_layout = QHBoxLayout(section_frame)
+        section_label = QLabel("Filter by Section:")
+        section_label.setFont(QFont("Segoe UI", 12))
+        section_label.setStyleSheet("color: #2d3436;")
+        section_layout.addWidget(section_label)
 
-        self.install_combo = QComboBox()
-        self.install_combo.setFont(QFont("Segoe UI", 12))
-        self.install_combo.setStyleSheet("""
+        self.section_combo = QComboBox()
+        self.section_combo.setFont(QFont("Segoe UI", 12))
+        self.section_combo.setStyleSheet("""
             QComboBox {
                 background-color: #ffffff;
                 border: 1px solid #dfe6e9;
@@ -205,10 +304,49 @@ class EquipmentApp(QMainWindow):
                 border: 1px solid #0984e3;
             }
         """)
-        self.install_combo.addItem("All")
-        self.install_combo.currentTextChanged.connect(self.update_equipment_table)
-        install_layout.addWidget(self.install_combo)
-        layout.addWidget(install_frame)
+        self.section_combo.addItem("All")
+        self.section_combo.currentTextChanged.connect(self.update_equipment_table)
+        section_layout.addWidget(self.section_combo)
+        layout.addWidget(section_frame)
+
+        # Filter frame
+        filter_frame = QFrame()
+        filter_frame.setStyleSheet("""
+            QFrame {
+                background-color: #ffffff;
+                border: 1px solid #dfe6e9;
+                border-radius: 5px;
+                padding: 10px;
+            }
+        """)
+        filter_layout = QHBoxLayout(filter_frame)
+        filter_label = QLabel("Filter by:")
+        filter_label.setFont(QFont("Segoe UI", 12))
+        filter_label.setStyleSheet("color: #2d3436;")
+        filter_layout.addWidget(filter_label)
+
+        self.filter_combo = QComboBox()
+        self.filter_combo.setFont(QFont("Segoe UI", 12))
+        self.filter_combo.setStyleSheet("""
+            QComboBox {
+                background-color: #ffffff;
+                border: 1px solid #dfe6e9;
+                padding: 5px;
+                border-radius: 3px;
+                color: #2d3436;
+            }
+            QComboBox::drop-down {
+                border-left: 1px solid #dfe6e9;
+                padding-right: 5px;
+            }
+            QComboBox:hover {
+                border: 1px solid #0984e3;
+            }
+        """)
+        self.filter_combo.addItem("All")
+        self.filter_combo.currentTextChanged.connect(self.update_equipment_table)
+        filter_layout.addWidget(self.filter_combo)
+        layout.addWidget(filter_frame)
 
         # Table to display equipment data
         self.equipment_table = QTableWidget()
@@ -244,12 +382,28 @@ class EquipmentApp(QMainWindow):
     def load_sheet_equipment(self, sheet_name):
         if sheet_name:
             self.df = self.processed_data[sheet_name]
+            self.current_sheet_config = self.sheet_configs.get(sheet_name, {})
             if not self.df.empty:
-                # Update installation dropdown
-                installations = sorted(self.df.get("Unnamed: 0", pd.Series([])).dropna().unique())
-                self.install_combo.clear()
-                self.install_combo.addItem("All")
-                self.install_combo.addItems(installations)
+                # Update section dropdown for Cartographie sheets
+                if sheet_name in ["Cartographie moteur", "Cartographie transmission", "Cartographie Engin"] and 'Section' in self.df.columns:
+                    section_values = sorted(self.df['Section'].dropna().unique())
+                    self.section_combo.clear()
+                    self.section_combo.addItem("All")
+                    self.section_combo.addItems([str(val) for val in section_values if val in ["BG", "YSF"]])
+                else:
+                    self.section_combo.clear()
+                    self.section_combo.addItem("All")
+
+                # Update filter dropdown based on the filter column
+                filter_col = self.current_sheet_config.get("filter_col")
+                if filter_col and filter_col in self.df.columns:
+                    filter_values = sorted(self.df[filter_col].dropna().unique())
+                    self.filter_combo.clear()
+                    self.filter_combo.addItem("All")
+                    self.filter_combo.addItems([str(val) for val in filter_values])
+                else:
+                    self.filter_combo.clear()
+                    self.filter_combo.addItem("All")
                 self.update_equipment_table()
             else:
                 QMessageBox.critical(self, "Error", f"No valid data found in sheet {sheet_name}.")
@@ -258,18 +412,21 @@ class EquipmentApp(QMainWindow):
         if self.df is None:
             return
 
-        # Filter by installation
-        install_filter = self.install_combo.currentText()
-        if install_filter == "All":
-            filtered_df = self.df
-        else:
-            filtered_df = self.df[self.df["Unnamed: 0"] == install_filter]
+        # Filter by section
+        section_value = self.section_combo.currentText()
+        filtered_df = self.df
+        if section_value != "All" and 'Section' in filtered_df.columns:
+            filtered_df = filtered_df[filtered_df['Section'] == section_value]
+
+        # Filter by additional filter column
+        filter_value = self.filter_combo.currentText()
+        filter_col = self.current_sheet_config.get("filter_col")
+        if filter_value != "All" and filter_col and filter_col in filtered_df.columns:
+            filtered_df = filtered_df[filtered_df[filter_col] == filter_value]
 
         # Set up table
         self.equipment_table.clear()
-        columns = ["Equipement", "Sous-ensemble", "Quantité SE installée",
-                   "Sous-ensemble relais disponible (révisé)", "Sous-ensemble en attente révision",
-                   "Sous-ensemble encours de révision", "Corps de Sous-ensembles disponibles (révisable)"]
+        columns = self.current_sheet_config.get("headers", [])
         self.equipment_table.setColumnCount(len(columns))
         self.equipment_table.setHorizontalHeaderLabels(columns)
         self.equipment_table.setRowCount(len(filtered_df))
@@ -277,7 +434,7 @@ class EquipmentApp(QMainWindow):
         # Populate table
         for row_idx, (_, row) in enumerate(filtered_df.iterrows()):
             for col_idx, col in enumerate(columns):
-                item = QTableWidgetItem(str(row[col]))
+                item = QTableWidgetItem(str(row.get(col, "")))
                 item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)  # Make cells read-only
                 self.equipment_table.setItem(row_idx, col_idx, item)
 
@@ -408,43 +565,11 @@ class EquipmentApp(QMainWindow):
                 padding: 10px;
             }
         """)
-        data_layout = QVBoxLayout(self.data_frame)
-        data_layout.setContentsMargins(10, 10, 10, 10)
-        data_layout.setSpacing(10)
+        self.data_layout = QVBoxLayout(self.data_frame)
+        self.data_layout.setContentsMargins(10, 10, 10, 10)
+        self.data_layout.setSpacing(10)
 
         self.labels = {}
-        self.columns_to_display = [
-            "Quantité SE installée", "Sous-ensemble relais disponible (révisé)",
-            "Sous-ensemble en attente révision", "Sous-ensemble encours de révision",
-            "Corps de Sous-ensembles disponibles (révisable)"
-        ]
-
-        for col in self.columns_to_display:
-            row_layout = QHBoxLayout()
-            label = QLabel(f"{col}:")
-            label.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
-            label.setStyleSheet("color: #2d3436;")
-            row_layout.addWidget(label)
-
-            entry = QLineEdit()
-            entry.setFont(QFont("Segoe UI", 12))
-            entry.setStyleSheet("""
-                QLineEdit {
-                    background-color: #ffffff;
-                    border: 1px solid #dfe6e9;
-                    padding: 5px;
-                    border-radius: 3px;
-                    color: #2d3436;
-                }
-                QLineEdit:hover {
-                    border: 1px solid #0984e3;
-                }
-            """)
-            entry.setFixedHeight(35)
-            row_layout.addWidget(entry)
-
-            self.labels[col] = entry
-            data_layout.addLayout(row_layout)
 
         input_layout.addWidget(self.data_frame)
         layout.addWidget(self.input_frame)
@@ -478,30 +603,76 @@ class EquipmentApp(QMainWindow):
     def load_sheet_update(self, sheet_name):
         if sheet_name:
             self.df = self.processed_data[sheet_name]
+            self.current_sheet_config = self.sheet_configs.get(sheet_name, {})
             if not self.df.empty:
-                equipment_list = sorted(self.df["Equipement"].dropna().unique())
+                # Update equipment dropdown
+                equipment_col = "Equipement" if "Equipement" in self.df.columns else "équipement"
+                equipment_list = sorted(self.df[equipment_col].dropna().unique())
                 self.equipment_combo.clear()
-                self.equipment_combo.addItems(equipment_list)
+                self.equipment_combo.addItems([str(e) for e in equipment_list])
                 self.sous_ensemble_combo.clear()
+
+                # Update data fields dynamically based on numeric columns
+                for i in reversed(range(self.data_layout.count())):
+                    widget = self.data_layout.itemAt(i).widget()
+                    if widget:
+                        widget.deleteLater()
+
+                self.labels.clear()
+                numeric_cols = self.current_sheet_config.get("numeric_cols", [])
+                for col in numeric_cols:
+                    if col in self.df.columns:
+                        row_layout = QHBoxLayout()
+                        label = QLabel(f"{col}:")
+                        label.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
+                        label.setStyleSheet("color: #2d3436;")
+                        row_layout.addWidget(label)
+
+                        entry = QLineEdit()
+                        entry.setFont(QFont("Segoe UI", 12))
+                        entry.setStyleSheet("""
+                            QLineEdit {
+                                background-color: #ffffff;
+                                border: 1px solid #dfe6e9;
+                                padding: 5px;
+                                border-radius: 3px;
+                                color: #2d3436;
+                            }
+                            QLineEdit:hover {
+                                border: 1px solid #0984e3;
+                            }
+                        """)
+                        entry.setFixedHeight(35)
+                        row_layout.addWidget(entry)
+
+                        self.labels[col] = entry
+                        self.data_layout.addLayout(row_layout)
+
                 self.clear_data_fields()
             else:
                 QMessageBox.critical(self, "Error", f"No valid data found in sheet {sheet_name}.")
 
     def update_sous_ensemble(self, equipment):
         if equipment and self.df is not None:
-            sous_ensemble_list = sorted(self.df[self.df["Equipement"] == equipment]["Sous-ensemble"].dropna().unique())
-            self.sous_ensemble_combo.clear()
-            self.sous_ensemble_combo.addItems(sous_ensemble_list)
-            self.clear_data_fields()
+            sous_ensemble_col = "Sous-ensemble" if "Sous-ensemble" in self.df.columns else "Sous ensemble"
+            if sous_ensemble_col in self.df.columns:
+                equipment_col = "Equipement" if "Equipement" in self.df.columns else "équipement"
+                sous_ensemble_list = sorted(self.df[self.df[equipment_col] == equipment][sous_ensemble_col].dropna().unique())
+                self.sous_ensemble_combo.clear()
+                self.sous_ensemble_combo.addItems([str(s) for s in sous_ensemble_list])
+                self.clear_data_fields()
 
     def display_data(self, sous_ensemble):
         equipment = self.equipment_combo.currentText()
         if equipment and sous_ensemble and self.df is not None:
-            row = self.df[(self.df["Equipement"] == equipment) &
-                          (self.df["Sous-ensemble"] == sous_ensemble)]
-            if not row.empty:
-                for col, entry in self.labels.items():
-                    entry.setText(str(row[col].values[0]))
+            equipment_col = "Equipement" if "Equipement" in self.df.columns else "équipement"
+            sous_ensemble_col = "Sous-ensemble" if "Sous-ensemble" in self.df.columns else "Sous ensemble"
+            if sous_ensemble_col in self.df.columns:
+                row = self.df[(self.df[equipment_col] == equipment) &
+                              (self.df[sous_ensemble_col] == sous_ensemble)]
+                if not row.empty:
+                    for col, entry in self.labels.items():
+                        entry.setText(str(row[col].values[0]))
 
     def clear_data_fields(self):
         for entry in self.labels.values():
@@ -513,35 +684,41 @@ class EquipmentApp(QMainWindow):
         sous_ensemble = self.sous_ensemble_combo.currentText()
 
         if sheet_name and equipment and sous_ensemble and self.df is not None:
-            idx = self.df[(self.df["Equipement"] == equipment) &
-                          (self.df["Sous-ensemble"] == sous_ensemble)].index
-            if not idx.empty:
-                # Validate inputs
-                for col, entry in self.labels.items():
-                    try:
-                        value = float(entry.text()) if entry.text() else 0
-                        if value < 0:
-                            QMessageBox.critical(self, "Error", f"Value for {col} cannot be negative.")
+            equipment_col = "Equipement" if "Equipement" in self.df.columns else "équipement"
+            sous_ensemble_col = "Sous-ensemble" if "Sous-ensemble" in self.df.columns else "Sous ensemble"
+            if sous_ensemble_col in self.df.columns:
+                idx = self.df[(self.df[equipment_col] == equipment) &
+                              (self.df[sous_ensemble_col] == sous_ensemble)].index
+                if not idx.empty:
+                    # Validate inputs
+                    for col, entry in self.labels.items():
+                        try:
+                            value = float(entry.text()) if entry.text() else 0
+                            if value < 0:
+                                QMessageBox.critical(self, "Error", f"Value for {col} cannot be negative.")
+                                return
+                            self.df.at[idx[0], col] = value
+                        except ValueError:
+                            QMessageBox.critical(self, "Error", f"Invalid value for {col}. Please enter a number.")
                             return
-                        self.df.at[idx[0], col] = value
-                    except ValueError:
-                        QMessageBox.critical(self, "Error", f"Invalid value for {col}. Please enter a number.")
-                        return
 
-                try:
-                    with pd.ExcelWriter("Cartographie SE par atelier.xlsx", engine="openpyxl", mode="a", if_sheet_exists="replace") as writer:
-                        for sheet, sheet_data in self.processed_data.items():
-                            if sheet == sheet_name:
-                                sheet_data = self.df
-                            sheet_data.to_excel(writer, sheet_name=sheet, index=False)
-                    QMessageBox.information(self, "Success", "Data saved successfully!")
-                    # Refresh the equipment table and dashboard
-                    self.load_sheet_equipment(self.sheet_combo_equipment.currentText())
-                    self.update_dashboard()
-                except Exception as e:
-                    QMessageBox.critical(self, "Error", f"Failed to save data: {e}")
+                    try:
+                        with pd.ExcelWriter("ENGINS.xlsx", engine="openpyxl", mode="a", if_sheet_exists="replace") as writer:
+                            for sheet, sheet_data in self.processed_data.items():
+                                if sheet == sheet_name:
+                                    # Remove the temporary 'Section' column before saving
+                                    sheet_data = self.df.drop(columns=['Section'], errors='ignore')
+                                sheet_data.to_excel(writer, sheet_name=sheet, index=False)
+                        QMessageBox.information(self, "Success", "Data saved successfully!")
+                        # Refresh the equipment table and dashboard
+                        self.load_sheet_equipment(self.sheet_combo_equipment.currentText())
+                        self.update_dashboard()
+                    except Exception as e:
+                        QMessageBox.critical(self, "Error", f"Failed to save data: {e}")
+                else:
+                    QMessageBox.critical(self, "Error", "Selected equipment and sous-ensemble not found in data.")
             else:
-                QMessageBox.critical(self, "Error", "Selected equipment and sous-ensemble not found in data.")
+                QMessageBox.critical(self, "Error", "Sous-ensemble column not found in the selected sheet.")
         else:
             QMessageBox.critical(self, "Error", "Please select a sheet, equipment, and sous-ensemble.")
 
@@ -870,21 +1047,40 @@ class EquipmentApp(QMainWindow):
             return
 
         df = self.processed_data[sheet_name]
+        config = self.sheet_configs.get(sheet_name, {})
         if df.empty:
             self.stats_text.setText("No data available.")
             return
 
-        # Calculate statistics
-        total_equipments = len(df["Equipement"].unique())
-        total_sous_ensembles = len(df)
-        awaiting_revision = int(df["Sous-ensemble en attente révision"].sum())
-        in_progress = int(df["Sous-ensemble encours de révision"].sum())
-        stats = (
-            f"Total Equipments: {total_equipments}\n"
-            f"Total Sous-ensembles: {total_sous_ensembles}\n"
-            f"Sous-ensembles Awaiting Revision: {awaiting_revision}\n"
-            f"Sous-ensembles In Progress: {in_progress}"
-        )
+        # Calculate statistics based on sheet type
+        equipment_col = "Equipement" if "Equipement" in df.columns else "équipement"
+        sous_ensemble_col = "Sous-ensemble" if "Sous-ensemble" in df.columns else "Sous ensemble"
+
+        total_equipments = len(df[equipment_col].unique()) if equipment_col in df.columns else 0
+        total_sous_ensembles = len(df[sous_ensemble_col].dropna()) if sous_ensemble_col in df.columns else 0
+
+        stats = f"Total Equipments: {total_equipments}\n"
+        if sous_ensemble_col in df.columns:
+            stats += f"Total Sous-ensembles: {total_sous_ensembles}\n"
+
+        # Sheet-specific statistics
+        if sheet_name in ["Cartographie moteur", "Cartographie transmission", "Cartographie Engin"]:
+            awaiting_revision = int(df["Sous-ensemble en attente révision"].sum())
+            in_progress = int(df["Sous-ensemble encours de révision"].sum())
+            stats += (
+                f"Sous-ensembles Awaiting Revision: {awaiting_revision}\n"
+                f"Sous-ensembles In Progress: {in_progress}"
+            )
+        elif sheet_name in ["Programme 2025 BG", "Programme 2025 YSF"]:
+            total_cost = 0
+            if "Cout V2" in df.columns:
+                total_cost += df["Cout V2"].sum()
+            if "Cout [V2]" in df.columns:
+                total_cost += df["Cout [V2]"].sum()
+            if "Cout V1" in df.columns:
+                total_cost += df["Cout V1"].sum()
+            stats += f"Total Estimated Cost: {total_cost:.2f}"
+
         self.stats_text.setText(stats)
 
         # Clear previous alerts
@@ -893,20 +1089,26 @@ class EquipmentApp(QMainWindow):
             if widget:
                 widget.deleteLater()
 
-        # Generate alerts
-        critical_rows = df[
-            (df["Sous-ensemble relais disponible (révisé)"] == 0) &
-            (df["Sous-ensemble en attente révision"] > 0)
-        ]
-        for _, row in critical_rows.iterrows():
-            alert = f"Critical: {row['Equipement']} - {row['Sous-ensemble']} has 0 available and {row['Sous-ensemble en attente révision']} awaiting revision."
-            alert_label = QLabel(alert)
-            alert_label.setFont(QFont("Segoe UI", 12))
-            alert_label.setStyleSheet("color: #d63031; padding: 5px; background-color: #ffcccc; border-radius: 3px;")
-            self.alerts_layout.addWidget(alert_label)
+        # Generate alerts for specific sheets
+        if sheet_name in ["Cartographie moteur", "Cartographie transmission", "Cartographie Engin"]:
+            critical_rows = df[
+                (df["Sous-ensemble relais disponible (révisé)"] == 0) &
+                (df["Sous-ensemble en attente révision"] > 0)
+            ]
+            for _, row in critical_rows.iterrows():
+                alert = f"Critical: {row['Equipement']} - {row['Sous-ensemble']} has 0 available and {row['Sous-ensemble en attente révision']} awaiting revision."
+                alert_label = QLabel(alert)
+                alert_label.setFont(QFont("Segoe UI", 12))
+                alert_label.setStyleSheet("color: #d63031; padding: 5px; background-color: #ffcccc; border-radius: 3px;")
+                self.alerts_layout.addWidget(alert_label)
 
-        if critical_rows.empty:
-            no_alert = QLabel("No critical alerts.")
+            if critical_rows.empty:
+                no_alert = QLabel("No critical alerts.")
+                no_alert.setFont(QFont("Segoe UI", 12))
+                no_alert.setStyleSheet("color: #2d3436; padding: 5px; background-color: #e6ffed; border-radius: 3px;")
+                self.alerts_layout.addWidget(no_alert)
+        else:
+            no_alert = QLabel("Alerts not applicable for this sheet.")
             no_alert.setFont(QFont("Segoe UI", 12))
             no_alert.setStyleSheet("color: #2d3436; padding: 5px; background-color: #e6ffed; border-radius: 3px;")
             self.alerts_layout.addWidget(no_alert)
